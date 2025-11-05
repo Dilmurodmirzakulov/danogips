@@ -1,0 +1,5 @@
+.ui-autocomplete span.hl_results{background-color:#ffff66;}
+.ui-autocomplete-loading{background:white url('https://www.danogips.ru/js/ui-anim_basic_16x16.gif') right center no-repeat;}
+.ui-autocomplete{max-height:200px;overflow-y:auto;overflow-x:hidden;padding-right:5px;}
+.ui-autocomplete li{font-size:16px;}
+* html .ui-autocomplete{height:250px;}
