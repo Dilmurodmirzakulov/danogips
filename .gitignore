@@ -1,0 +1,23 @@
+# Large video files
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Cache files
+.cache/
+*.json
+
+# Environment files
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Translation output (optional - uncomment if you don't want to track translations)
+# uz/
+
