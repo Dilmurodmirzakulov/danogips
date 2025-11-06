@@ -1,0 +1,2 @@
+$(function(){if($('#good_type').length){$('.find_city').autocomplete({source:'/autocomplete_city.php?good='+$('#good_type').selectedIndex,minLength:2,select:function(event,ui){var
+url=ui.item.id,aim=Gid('query');if(url!='#'){location.href=url;}},html:true,open:function(event,ui){$('.ui-autocomplete').css('z-index',1000);}}).focus(function(){$(this).autocomplete('search','');});}});

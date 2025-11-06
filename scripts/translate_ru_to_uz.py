@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple, Iterable, Set
 
 import requests
 import chardet
-from bs4 import BeautifulSoup, NavigableString, Comment
+from bs4 import BeautifulSoup, NavigableString, Comment, Doctype
 
 
 def load_env(env_path_candidates: List[Path]) -> None:
@@ -221,11 +221,12 @@ def replace_in_html(
     meta_texts: List[str],
 ) -> None:
     for node, new_text in zip(nodes, node_texts):
-        node.replace_with(new_text)
+        safe_text = new_text if new_text is not None else ''
+        node.replace_with(safe_text)
     for (old, tag, attr), new_text in zip(attr_items, attr_texts):
-        tag[attr] = new_text
+        tag[attr] = new_text if new_text is not None else ''
     for (old, tag), new_text in zip(meta_items, meta_texts):
-        tag['content'] = new_text
+        tag['content'] = new_text if new_text is not None else ''
 
 
 def set_lang_and_hreflang(
@@ -234,18 +235,35 @@ def set_lang_and_hreflang(
     is_uz_page: bool,
 ) -> None:
     html_tag = soup.find('html')
-    if html_tag:
-        html_tag['lang'] = 'uz' if is_uz_page else (html_tag.get('lang') or 'ru')
+    if not html_tag:
+        # Create minimal HTML structure if missing
+        html_tag = soup.new_tag('html')
+        body = soup.new_tag('body')
+        # Move all top-level nodes into body, skipping Doctype declarations
+        for child in list(soup.contents):
+            if isinstance(child, Doctype):
+                continue
+            body.append(child.extract())
+        html_tag.append(body)
+        soup.append(html_tag)
+    html_tag['lang'] = 'uz' if is_uz_page else (html_tag.get('lang') or 'ru')
     # Add alternate links
     head = soup.find('head')
     if not head:
         head = soup.new_tag('head')
-        soup.html.insert(0, head)
+        html_tag.insert(0, head)
     if is_uz_page:
-        alt_ru = soup.new_tag('link', rel='alternate', hreflang='ru', href=f"/{rel_path}")
+        # Calculate relative path: count depth of rel_path and add one for uz/ directory
+        depth = rel_path.count('/')
+        up_levels = '../' * (depth + 1)
+        alt_ru = soup.new_tag('link', rel='alternate', hreflang='ru', href=f"{up_levels}{rel_path}")
         head.append(alt_ru)
     else:
-        alt_uz = soup.new_tag('link', rel='alternate', hreflang='uz', href=f"/uz/{rel_path}")
+        # Calculate relative path: from Russian page to Uzbek version
+        # For nested files, we need to go up to root, then into uz/
+        depth = rel_path.count('/')
+        up_levels = '../' * depth if depth > 0 else ''
+        alt_uz = soup.new_tag('link', rel='alternate', hreflang='uz', href=f"{up_levels}uz/{rel_path}")
         head.append(alt_uz)
 
 
@@ -257,13 +275,23 @@ def inject_language_switcher(soup: BeautifulSoup, rel_path: str, is_uz_page: boo
     container['style'] = 'position:fixed;bottom:12px;right:12px;z-index:9999;font-family:inherit;font-size:13px;background:#fff;border:1px solid #ddd;border-radius:6px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.08)'
     link = soup.new_tag('a')
     if is_uz_page:
-        link['href'] = f"/{rel_path}"
+        # Calculate relative path: count depth of rel_path and add one for uz/ directory
+        # For nested paths like "dlya_professionalov/dokumentacziya.html", we're in uz/dlya_professionalov/
+        # so we need to go up 2 levels (../../) to reach root, then access the path
+        depth = rel_path.count('/')
+        # Always need to go up from uz/ plus one for each directory level in the path
+        up_levels = '../' * (depth + 1)
+        link['href'] = f"{up_levels}{rel_path}"
         link['hreflang'] = 'ru'
         link.string = 'Русский'
     else:
-        link['href'] = f"/uz/{rel_path}"
+        # Calculate relative path: from Russian page to Uzbek version
+        # For nested files, we need to go up to root, then into uz/
+        depth = rel_path.count('/')
+        up_levels = '../' * depth if depth > 0 else ''
+        link['href'] = f"{up_levels}uz/{rel_path}"
         link['hreflang'] = 'uz'
-        link.string = 'O‘zbekcha'
+        link.string = "O'zbekcha"
     container.append(link)
     body.append(container)
 
@@ -317,6 +345,50 @@ def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding='utf-8')
 
 
+def process_russian_html_file(
+    src_path: Path,
+    rel_path: str,
+) -> None:
+    """Process Russian HTML file in-place to add Uzbek language switcher and hreflang."""
+    html = safe_read_text(src_path)
+    soup = BeautifulSoup(html, 'lxml')
+    
+    # Remove existing language switcher if present (to update paths if needed)
+    body = soup.find('body')
+    if body:
+        existing_switcher = body.find('div', style=lambda x: x and 'position:fixed' in x and 'bottom:12px' in x)
+        if existing_switcher:
+            existing_switcher.decompose()
+    
+    # Remove existing hreflang link if present
+    head = soup.find('head')
+    if head:
+        existing_hreflang = head.find('link', rel='alternate', hreflang='uz')
+        if existing_hreflang:
+            existing_hreflang.decompose()
+    
+    # Add hreflang and language switcher
+    set_lang_and_hreflang(soup, rel_path, is_uz_page=False)
+    inject_language_switcher(soup, rel_path, is_uz_page=False)
+    
+    # Preserve original doctype
+    orig_doctype = None
+    for line in html.splitlines()[:3]:
+        if line.lstrip().lower().startswith('<!doctype'):
+            orig_doctype = line.strip()
+            break
+    
+    out_html = str(soup)
+    # Fix rare BeautifulSoup quirk where leading 'html' text appears before <html>
+    stripped = out_html.lstrip()
+    if stripped.startswith('html<html'):
+        out_html = out_html.replace('html<', '<', 1)
+    if orig_doctype and not out_html.lstrip().lower().startswith('<!doctype'):
+        out_html = orig_doctype + "\n" + out_html
+    
+    write_text(src_path, out_html)
+
+
 def process_html_file(
     src_path: Path,
     dst_path: Path,
@@ -327,6 +399,12 @@ def process_html_file(
     report_rows: List[List[str]],
 ) -> None:
     html = safe_read_text(src_path)
+    # Capture original doctype line if present to preserve it
+    orig_doctype = None
+    for line in html.splitlines()[:3]:
+        if line.lstrip().lower().startswith('<!doctype'):
+            orig_doctype = line.strip()
+            break
     soup = BeautifulSoup(html, 'lxml')
 
     nodes, node_texts, attr_items, attr_texts, meta_items, meta_texts = collect_texts_for_translation(soup, glossary)
@@ -343,7 +421,14 @@ def process_html_file(
     set_lang_and_hreflang(soup, rel_path, is_uz_page=True)
     inject_language_switcher(soup, rel_path, is_uz_page=True)
 
-    write_text(dst_path, str(soup))
+    out_html = str(soup)
+    # Fix rare BeautifulSoup quirk where leading 'html' text appears before <html>
+    stripped = out_html.lstrip()
+    if stripped.startswith('html<html'):
+        out_html = out_html.replace('html<', '<', 1)
+    if orig_doctype and not out_html.lstrip().lower().startswith('<!doctype'):
+        out_html = orig_doctype + "\n" + out_html
+    write_text(dst_path, out_html)
 
     report_rows.append([
         rel_path,
@@ -400,6 +485,7 @@ def main() -> None:
     parser.add_argument('--glossary', default=str(Path(__file__).resolve().parents[1] / 'www.danogips.ru' / 'translate_glossary.csv'))
     parser.add_argument('--modify-ru', action='store_true', help='Also inject RU→UZ links into original RU pages (edits RU files)')
     parser.add_argument('--report', default='translation_report.csv')
+    parser.add_argument('--clean', action='store_true', help='Remove destination folder before generation to avoid nesting')
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parents[1]
@@ -428,11 +514,30 @@ def main() -> None:
 
     report_rows: List[List[str]] = []
 
+    # Optional cleanup to avoid recursive nesting like uz/uz/...
+    if args.clean and dst_root.exists():
+        import shutil
+        shutil.rmtree(dst_root)
+
     for path in src_root.rglob('*'):
         if path.is_dir():
             continue
+        # Skip anything under the destination root to prevent recursion
+        try:
+            if path.resolve().is_relative_to(dst_root):
+                continue
+        except AttributeError:
+            # Python <3.9 fallback
+            try:
+                path.resolve().relative_to(dst_root)
+                continue
+            except Exception:
+                pass
         rel = path.relative_to(src_root).as_posix()
         if is_html_file(path):
+            # First, add Uzbek language switcher to Russian pages (in-place)
+            process_russian_html_file(path, rel)
+            # Then, translate to create Uzbek version
             dst_path = dst_root / rel
             process_html_file(path, dst_path, rel, cache, translator, glossary, report_rows)
         else:
