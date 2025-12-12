@@ -6,7 +6,10 @@
 
 # Cache files
 .cache/
-*.json
+translation_cache.json
+
+# Allow Vercel config
+!vercel.json
 
 # Environment files
 .env

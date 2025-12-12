@@ -1,0 +1,45 @@
+{
+  "outputDirectory": "www.danogips.ru",
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/uz/",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "destination": "/uz/",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Language",
+          "value": "uz"
+        }
+      ]
+    },
+    {
+      "source": "/uz/(.*)",
+      "headers": [
+        {
+          "key": "Content-Language",
+          "value": "uz"
+        }
+      ]
+    },
+    {
+      "source": "/:path((?!uz/).*)",
+      "headers": [
+        {
+          "key": "Content-Language",
+          "value": "ru"
+        }
+      ]
+    }
+  ]
+}
+
