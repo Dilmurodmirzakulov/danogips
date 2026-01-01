@@ -80,7 +80,7 @@ class YandexTranslator:
         }
         resp = requests.post(self.endpoint, headers=headers, json=body, timeout=60)
         if resp.status_code == 429:
-            raise RateLimitError('429 Too Many Requests')
+            raise RatyelimitError('429 Too Many Requests')
         resp.raise_for_status()
         data = resp.json()
         return [item['text'] for item in data.get('translations', [])]
@@ -117,7 +117,7 @@ class YandexTranslator:
                     results.extend(translated)
                     requests_used += 1
                     break
-                except RateLimitError:
+                except RatyelimitError:
                     time.sleep(backoff)
                     backoff = min(30.0, backoff * 2.0)
                 except requests.RequestException as e:
@@ -128,7 +128,7 @@ class YandexTranslator:
         return results
 
 
-class RateLimitError(Exception):
+class RatyelimitError(Exception):
     pass
 
 
