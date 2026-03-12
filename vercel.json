@@ -1,5 +1,11 @@
 {
   "outputDirectory": "www.danogips.ru",
+  "rewrites": [
+    {
+      "source": "/api/danogips/:path*",
+      "destination": "https://api.uzchem.uz/api/danogips/:path*"
+    }
+  ],
   "redirects": [
     {
       "source": "/",
@@ -14,11 +20,20 @@
   ],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/api/(.*)",
       "headers": [
         {
-          "key": "Content-Language",
-          "value": "uz"
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/widgets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
         }
       ]
     },
