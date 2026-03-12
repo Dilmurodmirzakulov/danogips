@@ -17,10 +17,11 @@
   /* ── Config ────────────────────────────────── */
   var cfg = window.DANOGIPS_WIDGET || {};
   var API = cfg.apiBase || "";
-  var lang = window.location.pathname.indexOf("/uz") === 0 ||
-             window.location.pathname.indexOf("/uz/") !== -1
-    ? "uz"
-    : "ru";
+  var lang =
+    window.location.pathname.indexOf("/uz") === 0 ||
+    window.location.pathname.indexOf("/uz/") !== -1
+      ? "uz"
+      : "ru";
 
   function lk(prefix) {
     return prefix + "_" + lang;
@@ -59,11 +60,19 @@
         var link = b.link || "";
         var imgSrc = b.image || "";
 
-        /* If image path is relative and doesn't start with http, prefix with API base */
-        if (imgSrc && imgSrc.indexOf("http") !== 0 && imgSrc.indexOf("/") !== 0) {
-          imgSrc = API + "/uploads/" + imgSrc;
-        } else if (imgSrc && imgSrc.indexOf("/uploads") === 0) {
-          imgSrc = API + imgSrc;
+        /* Resolve image URL:
+           - absolute URL (http/https) → use as-is
+           - /uploads/... → prefix with API base (admin-uploaded files)
+           - anything else → make root-absolute so both /ru and /uz pages
+             load from the same site root (e.g. "img/slider/x.jpg" → "/img/slider/x.jpg") */
+        if (imgSrc && imgSrc.indexOf("http") !== 0) {
+          if (imgSrc.indexOf("/uploads") === 0) {
+            imgSrc = API + imgSrc;
+          } else if (imgSrc.indexOf("/") !== 0) {
+            /* site-relative path — prepend "/" to make it root-absolute */
+            imgSrc = "/" + imgSrc;
+          }
+          /* paths already starting with "/" are used as-is */
         }
 
         var img = document.createElement("img");
